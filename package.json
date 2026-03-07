@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "demo": "node ./scripts/run-electron-with-x11-env.mjs --auto-demo --exit-after-demo",
+    "start:bridge": "node ./scripts/run-lock-bridge-compatible.mjs",
     "start": "node ./scripts/run-electron-with-x11-env.mjs",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -19,9 +19,19 @@ npm test
 npm run build
 npm run dev
 npm run demo
+npm run start:bridge -- --tcp-port 47843
 ```
 
 `npm run demo` は desktop session の `DISPLAY` / `XAUTHORITY` を自動検出し、build 後に lock screen demo を 1 回表示して自動終了します。
+
+`npm run start:bridge` は `tmp/tauri-caption-overlay-poc/lock_screen_bridge.py` に近い CLI を受け付ける互換 entrypoint です。少なくとも次の flag を受けられます。
+
+- `--tcp-port`
+- `--biometric-password-file`
+- `--biometric-password-private-key`
+- `--biometric-unlock-signal`
+
+`--ws-port` / `--http-port` / `--debug` は互換のため受け付けますが、Electron 実装では無視します。
 
 明示指定したい場合:
 
@@ -57,6 +67,18 @@ npm run demo
 - password file: `~/.config/yuiclaw/biometric-password.enc`
 - decrypt key: `~/.ssh/google_compute_engine`
 - unlock signal: `~/.cache/yuiclaw/biometric-unlock.signal`
+
+環境変数 override:
+
+- `ASEC_BIOMETRIC_PASSWORD_FILE`
+- `ASEC_BIOMETRIC_PASSWORD_PRIVATE_KEY`
+- `ASEC_BIOMETRIC_UNLOCK_SIGNAL_FILE`
+
+既存運用との互換のため、以下の既存 env 名も fallback として読めます。
+
+- `WHISPER_AGENT_BIOMETRIC_PASSWORD_FILE`
+- `WHISPER_AGENT_BIOMETRIC_PASSWORD_PRIVATE_KEY`
+- `WHISPER_AGENT_BIOMETRIC_UNLOCK_SIGNAL_FILE`
 
 ## Notes
 

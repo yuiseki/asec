@@ -17,6 +17,8 @@ Accepted
 - lock screen UI レイアウトと animation は `tmp/tauri-caption-overlay-poc/web` を踏襲する
 - password submit、unlock signal file、audio mute/unmute も `asec` に集約する
 - 起動時には stale mute を解除し、lock crash 後の無音残留を回復する
+- password file / private key / unlock signal は `ASEC_*` env で上書きでき、既存 `WHISPER_AGENT_BIOMETRIC_*` env も fallback として読む
+- 置き換えを容易にするため、legacy `lock_screen_bridge.py` に近い CLI entrypoint も持つ
 - 既定ポートは移行期間中だけ `47843` を使う
 
 ## Consequences

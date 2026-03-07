@@ -32,6 +32,12 @@ type PasswordLoaderDeps = {
   ) => Promise<string>;
 };
 
+type SecurityPaths = {
+  passwordFile: string;
+  privateKey: string;
+  unlockSignalFile: string;
+};
+
 const fsModule = process.getBuiltinModule?.('fs');
 const osModule = process.getBuiltinModule?.('os');
 const childProcessModule = process.getBuiltinModule?.('child_process');
@@ -153,14 +159,48 @@ export function expandHomePath(path: string): string {
   return path;
 }
 
+function readOverride(
+  ...names: string[]
+): string | undefined {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+export function resolveSecurityPaths(): SecurityPaths {
+  return {
+    passwordFile: expandHomePath(
+      readOverride(
+        'ASEC_BIOMETRIC_PASSWORD_FILE',
+        'WHISPER_AGENT_BIOMETRIC_PASSWORD_FILE',
+      ) ?? DEFAULT_BIOMETRIC_PASSWORD_FILE,
+    ),
+    privateKey: expandHomePath(
+      readOverride(
+        'ASEC_BIOMETRIC_PASSWORD_PRIVATE_KEY',
+        'WHISPER_AGENT_BIOMETRIC_PASSWORD_PRIVATE_KEY',
+      ) ?? DEFAULT_BIOMETRIC_PASSWORD_PRIVATE_KEY,
+    ),
+    unlockSignalFile: expandHomePath(
+      readOverride(
+        'ASEC_BIOMETRIC_UNLOCK_SIGNAL_FILE',
+        'WHISPER_AGENT_BIOMETRIC_UNLOCK_SIGNAL_FILE',
+      ) ?? DEFAULT_BIOMETRIC_UNLOCK_SIGNAL_FILE,
+    ),
+  };
+}
+
 export async function loadPasswordCandidates(
   deps: PasswordLoaderDeps = {},
 ): Promise<string[]> {
   const fs = deps.fsLike ?? loadFs();
   const currentTmpdir = deps.tmpdir ?? osModule.tmpdir;
   const decrypt = deps.decryptWithPrivateKey ?? decryptWithPrivateKey;
-  const passwordFile = expandHomePath(DEFAULT_BIOMETRIC_PASSWORD_FILE);
-  const privateKey = expandHomePath(DEFAULT_BIOMETRIC_PASSWORD_PRIVATE_KEY);
+  const { passwordFile, privateKey } = resolveSecurityPaths();
 
   if (!fs.existsSync(passwordFile)) {
     throw new Error('パスワードファイルが見つかりません');
@@ -207,7 +247,7 @@ export async function validatePassword(password: string): Promise<void> {
 }
 
 export async function writeUnlockSignal(
-  signalPath = expandHomePath(DEFAULT_BIOMETRIC_UNLOCK_SIGNAL_FILE),
+  signalPath = resolveSecurityPaths().unlockSignalFile,
   fsLike?: {
     promises: Pick<FsLike['promises'], 'mkdir' | 'writeFile'>;
   },

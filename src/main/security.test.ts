@@ -5,6 +5,7 @@ import {
   loadPasswordCandidates,
   normalizePasswordText,
   passwordMatchesCandidates,
+  resolveSecurityPaths,
   writeUnlockSignal,
 } from './security';
 
@@ -36,6 +37,38 @@ describe('expandHomePath', () => {
     expect(expandHomePath('~/.cache/test.signal')).toBe(
       '/tmp/example-home/.cache/test.signal',
     );
+  });
+});
+
+describe('resolveSecurityPaths', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('uses asec-specific env overrides first', () => {
+    vi.stubEnv('HOME', '/tmp/example-home');
+    vi.stubEnv('ASEC_BIOMETRIC_PASSWORD_FILE', '/custom/password.enc');
+    vi.stubEnv('ASEC_BIOMETRIC_PASSWORD_PRIVATE_KEY', '/custom/private.key');
+    vi.stubEnv('ASEC_BIOMETRIC_UNLOCK_SIGNAL_FILE', '/custom/unlock.signal');
+
+    expect(resolveSecurityPaths()).toEqual({
+      passwordFile: '/custom/password.enc',
+      privateKey: '/custom/private.key',
+      unlockSignalFile: '/custom/unlock.signal',
+    });
+  });
+
+  it('falls back to existing whisper agent biometric env names', () => {
+    vi.stubEnv('HOME', '/tmp/example-home');
+    vi.stubEnv('WHISPER_AGENT_BIOMETRIC_PASSWORD_FILE', '/legacy/password.enc');
+    vi.stubEnv('WHISPER_AGENT_BIOMETRIC_PASSWORD_PRIVATE_KEY', '/legacy/private.key');
+    vi.stubEnv('WHISPER_AGENT_BIOMETRIC_UNLOCK_SIGNAL_FILE', '/legacy/unlock.signal');
+
+    expect(resolveSecurityPaths()).toEqual({
+      passwordFile: '/legacy/password.enc',
+      privateKey: '/legacy/private.key',
+      unlockSignalFile: '/legacy/unlock.signal',
+    });
   });
 });
 
@@ -71,6 +104,27 @@ describe('writeUnlockSignal', () => {
     expect(writtenPath).toBe(signalPath);
     expect(String(contents)).toMatch(/^unlock:\d+\n$/);
     expect(encoding).toBe('utf8');
+  });
+
+  it('uses environment overrides when no explicit path is passed', async () => {
+    vi.stubEnv('ASEC_BIOMETRIC_UNLOCK_SIGNAL_FILE', '/tmp/asec-env/unlock.signal');
+
+    await writeUnlockSignal(undefined, {
+      promises: {
+        mkdir: mkdirMock,
+        writeFile: writeFileMock,
+      },
+    });
+
+    expect(mkdirMock).toHaveBeenCalledWith('/tmp/asec-env', {
+      recursive: true,
+    });
+    const firstCall = writeFileMock.mock.calls[0] as unknown as [
+      string,
+      string,
+      BufferEncoding,
+    ] | undefined;
+    expect(firstCall?.[0]).toBe('/tmp/asec-env/unlock.signal');
   });
 });
 
