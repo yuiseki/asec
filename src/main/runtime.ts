@@ -77,6 +77,7 @@ export class AsecRuntime {
   }
 
   async init(): Promise<void> {
+    await unlockAudio();
     this.registerIpcHandlers();
     if (this.isDev) {
       const rendererUrl = process.env.VITE_DEV_SERVER_URL;

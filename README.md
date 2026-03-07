@@ -8,6 +8,7 @@ Electron + React + TypeScript で実装した lock screen / security surface で
 - newline-delimited JSON over TCP の `lock_screen_show` / `lock_screen_hide` をサポート
 - password submit で local unlock signal file を書く
 - lock 中の audio mute / unlock 時の unmute を担当
+- 起動時に stale mute を解除して lock crash 後の無音残留を回復する
 - 開発中の既定ポートは `127.0.0.1:47843`
 
 ## Commands

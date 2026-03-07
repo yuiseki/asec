@@ -16,6 +16,7 @@ Accepted
 - `lock_screen_show` / `lock_screen_hide` の TCP IPC を維持する
 - lock screen UI レイアウトと animation は `tmp/tauri-caption-overlay-poc/web` を踏襲する
 - password submit、unlock signal file、audio mute/unmute も `asec` に集約する
+- 起動時には stale mute を解除し、lock crash 後の無音残留を回復する
 - 既定ポートは移行期間中だけ `47843` を使う
 
 ## Consequences

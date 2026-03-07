@@ -111,6 +111,7 @@ describe('AsecRuntime', () => {
   it('shows the fullscreen lock surface and forwards the lock command', async () => {
     const runtime = new AsecRuntime();
     await runtime.init();
+    unlockAudioMock.mockClear();
 
     const rendererReady = ipcHandlerMap.get('security-surface:renderer-ready');
     expect(rendererReady).toBeTypeOf('function');
@@ -142,6 +143,7 @@ describe('AsecRuntime', () => {
   it('submits passwords through the security helpers', async () => {
     const runtime = new AsecRuntime();
     await runtime.init();
+    unlockAudioMock.mockClear();
 
     const submitPassword = ipcHandlerMap.get('security-surface:submit-password');
     expect(submitPassword).toBeTypeOf('function');
@@ -154,6 +156,7 @@ describe('AsecRuntime', () => {
   it('restores audio as soon as a hide request arrives and forwards the unlock animation command', async () => {
     const runtime = new AsecRuntime();
     await runtime.init();
+    unlockAudioMock.mockClear();
 
     const rendererReady = ipcHandlerMap.get('security-surface:renderer-ready');
     expect(rendererReady).toBeTypeOf('function');
@@ -176,6 +179,7 @@ describe('AsecRuntime', () => {
   it('hides the window when the renderer finishes the unlock animation', async () => {
     const runtime = new AsecRuntime();
     await runtime.init();
+    unlockAudioMock.mockClear();
 
     const completeHide = ipcHandlerMap.get('security-surface:complete-lock-screen-hide');
     expect(completeHide).toBeTypeOf('function');
@@ -184,5 +188,13 @@ describe('AsecRuntime', () => {
     expect(unlockAudioMock).not.toHaveBeenCalled();
     expect(browserWindowState.setFullScreen).toHaveBeenCalledWith(false);
     expect(browserWindowState.hide).toHaveBeenCalledOnce();
+  });
+
+  it('unmutes stale lock audio during startup recovery', async () => {
+    const runtime = new AsecRuntime();
+
+    await runtime.init();
+
+    expect(unlockAudioMock).toHaveBeenCalledOnce();
   });
 });

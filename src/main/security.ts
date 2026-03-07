@@ -19,8 +19,29 @@ type FsLike = {
   };
 };
 
-async function loadFs(): Promise<FsLike> {
-  return await import('node:fs') as FsLike;
+type PasswordLoaderDeps = {
+  fsLike?: FsLike;
+  tmpdir?: () => string;
+  decryptWithPrivateKey?: (
+    privateKeyPath: string,
+    cipherBytes: Buffer,
+    deps: {
+      fsLike: FsLike;
+      tmpdir: () => string;
+    },
+  ) => Promise<string>;
+};
+
+const fsModule = process.getBuiltinModule?.('fs');
+const osModule = process.getBuiltinModule?.('os');
+const childProcessModule = process.getBuiltinModule?.('child_process');
+
+if (!fsModule || !osModule || !childProcessModule) {
+  throw new Error('Node builtin modules are unavailable in the Electron main runtime');
+}
+
+function loadFs(): FsLike {
+  return fsModule as unknown as FsLike;
 }
 
 function joinPath(left: string, right: string): string {
@@ -38,19 +59,70 @@ function parentDir(path: string): string {
   return normalized.slice(0, lastSlash);
 }
 
-async function execFileAsync(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string }> {
-  const [{ execFile }, { promisify }] = await Promise.all([
-    import('node:child_process'),
-    import('node:util'),
-  ]);
-  const run = promisify(execFile);
-  const result = await run(command, args);
-  return {
-    stdout: result.stdout ?? '',
-  };
+function decodeCipherBase64(cipherBase64: string): Buffer {
+  const normalized = cipherBase64.trim();
+  if (
+    !normalized ||
+    normalized.length % 4 !== 0 ||
+    /[^A-Za-z0-9+/=]/u.test(normalized)
+  ) {
+    throw new Error('invalid base64');
+  }
+
+  const cipherBytes = Buffer.from(normalized, 'base64');
+  if (!cipherBytes.length || cipherBytes.toString('base64') !== normalized) {
+    throw new Error('invalid base64');
+  }
+  return cipherBytes;
+}
+
+async function decryptWithPrivateKey(
+  privateKeyPath: string,
+  cipherBytes: Buffer,
+  deps: {
+    fsLike: FsLike;
+    tmpdir: () => string;
+  },
+): Promise<string> {
+  const { fsLike, tmpdir } = deps;
+  const tmpRoot = await fsLike.promises.mkdtemp(joinPath(tmpdir(), 'asec-password-'));
+  const cipherPath = joinPath(tmpRoot, 'cipher.bin');
+  const tempKeyPath = joinPath(tmpRoot, 'key');
+
+  try {
+    await fsLike.promises.writeFile(cipherPath, cipherBytes);
+    await fsLike.promises.copyFile(privateKeyPath, tempKeyPath);
+    await fsLike.promises.chmod(tempKeyPath, 0o600);
+
+    const stdout = await new Promise<string>((resolve, reject) => {
+      childProcessModule.execFile(
+        'openssl',
+        [
+          'pkeyutl',
+          '-decrypt',
+          '-inkey',
+          tempKeyPath,
+          '-in',
+          cipherPath,
+          '-pkeyopt',
+          'rsa_padding_mode:oaep',
+          '-pkeyopt',
+          'rsa_oaep_md:sha256',
+        ],
+        (error, nextStdout) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve(nextStdout ?? '');
+        },
+      );
+    });
+
+    return stdout;
+  } finally {
+    await fsLike.promises.rm(tmpRoot, { recursive: true, force: true });
+  }
 }
 
 export function normalizePasswordText(input: string): string {
@@ -82,12 +154,11 @@ export function expandHomePath(path: string): string {
 }
 
 export async function loadPasswordCandidates(
-  fsLike?: FsLike,
+  deps: PasswordLoaderDeps = {},
 ): Promise<string[]> {
-  const [{ tmpdir }] = await Promise.all([
-    import('node:os'),
-  ]);
-  const fs = fsLike ?? await loadFs();
+  const fs = deps.fsLike ?? loadFs();
+  const currentTmpdir = deps.tmpdir ?? osModule.tmpdir;
+  const decrypt = deps.decryptWithPrivateKey ?? decryptWithPrivateKey;
   const passwordFile = expandHomePath(DEFAULT_BIOMETRIC_PASSWORD_FILE);
   const privateKey = expandHomePath(DEFAULT_BIOMETRIC_PASSWORD_PRIVATE_KEY);
 
@@ -101,34 +172,18 @@ export async function loadPasswordCandidates(
   const cipherBase64 = await fs.promises.readFile(passwordFile, 'utf8');
   let cipherBytes: Buffer;
   try {
-    cipherBytes = Buffer.from(cipherBase64.trim(), 'base64');
+    cipherBytes = decodeCipherBase64(cipherBase64);
   } catch (error) {
     throw new Error(
       `ファイル読み込み失敗: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 
-  const tmpRoot = await fs.promises.mkdtemp(joinPath(tmpdir(), 'asec-password-'));
-  const cipherPath = joinPath(tmpRoot, 'cipher.bin');
-  const tempKeyPath = joinPath(tmpRoot, 'key');
   try {
-    await fs.promises.writeFile(cipherPath, cipherBytes);
-    await fs.promises.copyFile(privateKey, tempKeyPath);
-    await fs.promises.chmod(tempKeyPath, 0o600);
-
-    const { stdout } = await execFileAsync('openssl', [
-      'pkeyutl',
-      '-decrypt',
-      '-inkey',
-      tempKeyPath,
-      '-in',
-      cipherPath,
-      '-pkeyopt',
-      'rsa_padding_mode:oaep',
-      '-pkeyopt',
-      'rsa_oaep_md:sha256',
-    ]);
-
+    const stdout = await decrypt(privateKey, cipherBytes, {
+      fsLike: fs,
+      tmpdir: currentTmpdir,
+    });
     const candidates = stdout
       .split(/\r?\n/u)
       .map((line) => line.trim())
@@ -141,8 +196,6 @@ export async function loadPasswordCandidates(
     throw new Error(
       `復号エラー: ${error instanceof Error ? error.message : String(error)}`,
     );
-  } finally {
-    await fs.promises.rm(tmpRoot, { recursive: true, force: true });
   }
 }
 
@@ -159,7 +212,7 @@ export async function writeUnlockSignal(
     promises: Pick<FsLike['promises'], 'mkdir' | 'writeFile'>;
   },
 ): Promise<void> {
-  const fs = fsLike ?? await loadFs();
+  const fs = fsLike ?? loadFs();
   await fs.promises.mkdir(parentDir(signalPath), { recursive: true });
   await fs.promises.writeFile(signalPath, `unlock:${Date.now()}\n`, 'utf8');
 }
