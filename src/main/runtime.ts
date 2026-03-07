@@ -1,5 +1,4 @@
-import { createServer, type Server, type Socket } from 'node:net';
-import { join } from 'node:path';
+import type { Server, Socket } from 'node:net';
 
 import {
   BrowserWindow,
@@ -18,6 +17,13 @@ import { lockAudio, unlockAudio } from './audio';
 import { shouldUseRendererDevServer } from './runtime-options';
 import { validatePassword, writeUnlockSignal } from './security';
 import { buildSecurityWindowOptions } from './window';
+
+const netModule = process.getBuiltinModule?.('net');
+const pathModule = process.getBuiltinModule?.('path');
+
+if (!netModule || !pathModule) {
+  throw new Error('Node builtin modules are unavailable in the Electron main runtime');
+}
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -54,7 +60,7 @@ export class AsecRuntime {
   private rendererReadySettled = false;
 
   constructor() {
-    const preloadPath = join(__dirname, '../preload/index.js');
+    const preloadPath = pathModule.join(__dirname, '../preload/index.js');
     const options = buildSecurityWindowOptions();
     this.securityWindow = new BrowserWindow({
       ...options,
@@ -80,7 +86,7 @@ export class AsecRuntime {
       await this.securityWindow.loadURL(rendererUrl);
     } else {
       await this.securityWindow.loadFile(
-        join(__dirname, '../renderer/index.html'),
+        pathModule.join(__dirname, '../renderer/index.html'),
       );
     }
   }
@@ -96,7 +102,7 @@ export class AsecRuntime {
       10,
     );
 
-    this.server = createServer((socket) => {
+    this.server = netModule.createServer((socket) => {
       void this.handleSocket(socket);
     });
 
