@@ -29,6 +29,11 @@ body {
   font-family: "Noto Sans CJK JP", "Noto Sans", sans-serif;
 }
 
+#root {
+  width: 100%;
+  height: 100%;
+}
+
 body {
   display: flex;
   align-items: flex-end;
