@@ -1,38 +1,57 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+type PactlRunner = (args: string[]) => Promise<string>;
 
-const execFileAsync = promisify(execFile);
+const childProcessModule = process.getBuiltinModule?.('child_process');
 
-let audioMutedBeforeLock: boolean | null = null;
+if (!childProcessModule) {
+  throw new Error('Node child_process module is unavailable in the Electron main runtime');
+}
 
 async function runPactl(args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync('pactl', args);
-  return stdout;
+  return await new Promise<string>((resolve, reject) => {
+    childProcessModule.execFile('pactl', args, (error, stdout) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(stdout ?? '');
+    });
+  });
 }
 
-export async function lockAudio(): Promise<void> {
-  try {
-    const stdout = await runPactl(['get-sink-mute', '@DEFAULT_SINK@']);
-    audioMutedBeforeLock = stdout.toLowerCase().includes('yes');
-  } catch {
-    audioMutedBeforeLock = null;
-  }
+export function createAudioController(runCommand: PactlRunner = runPactl): {
+  lockAudio: () => Promise<void>;
+  unlockAudio: () => Promise<void>;
+} {
+  let audioMutedBeforeLock: boolean | null = null;
 
-  try {
-    await runPactl(['set-sink-mute', '@DEFAULT_SINK@', '1']);
-  } catch {
-    // Ignore audio control failures on systems without pactl.
-  }
+  return {
+    async lockAudio(): Promise<void> {
+      try {
+        const stdout = await runCommand(['get-sink-mute', '@DEFAULT_SINK@']);
+        audioMutedBeforeLock = stdout.toLowerCase().includes('yes');
+      } catch {
+        audioMutedBeforeLock = null;
+      }
+
+      try {
+        await runCommand(['set-sink-mute', '@DEFAULT_SINK@', '1']);
+      } catch {
+        // Ignore audio control failures on systems without pactl.
+      }
+    },
+
+    async unlockAudio(): Promise<void> {
+      const shouldUnmute = audioMutedBeforeLock === false || audioMutedBeforeLock === null;
+      if (shouldUnmute) {
+        try {
+          await runCommand(['set-sink-mute', '@DEFAULT_SINK@', '0']);
+        } catch {
+          // Ignore audio control failures on systems without pactl.
+        }
+      }
+      audioMutedBeforeLock = null;
+    },
+  };
 }
 
-export async function unlockAudio(): Promise<void> {
-  const shouldUnmute = audioMutedBeforeLock === false || audioMutedBeforeLock === null;
-  if (shouldUnmute) {
-    try {
-      await runPactl(['set-sink-mute', '@DEFAULT_SINK@', '0']);
-    } catch {
-      // Ignore audio control failures on systems without pactl.
-    }
-  }
-  audioMutedBeforeLock = null;
-}
+export const { lockAudio, unlockAudio } = createAudioController();
