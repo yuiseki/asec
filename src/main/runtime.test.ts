@@ -151,7 +151,29 @@ describe('AsecRuntime', () => {
     expect(writeUnlockSignalMock).toHaveBeenCalledOnce();
   });
 
-  it('unlocks audio and hides the window when the renderer finishes the unlock animation', async () => {
+  it('restores audio as soon as a hide request arrives and forwards the unlock animation command', async () => {
+    const runtime = new AsecRuntime();
+    await runtime.init();
+
+    const rendererReady = ipcHandlerMap.get('security-surface:renderer-ready');
+    expect(rendererReady).toBeTypeOf('function');
+    await rendererReady?.();
+
+    const dispatchRequest = Reflect.get(runtime, 'dispatchRequest') as (
+      request: { type: 'lock_screen_show'; text: string } | { type: 'lock_screen_hide' },
+    ) => Promise<void>;
+
+    await dispatchRequest.call(runtime, {
+      type: 'lock_screen_hide',
+    });
+
+    expect(unlockAudioMock).toHaveBeenCalledOnce();
+    expect(browserWindowState.send).toHaveBeenCalledWith('security-surface:command', {
+      kind: 'lock/hide',
+    });
+  });
+
+  it('hides the window when the renderer finishes the unlock animation', async () => {
     const runtime = new AsecRuntime();
     await runtime.init();
 
@@ -159,7 +181,7 @@ describe('AsecRuntime', () => {
     expect(completeHide).toBeTypeOf('function');
     await completeHide?.();
 
-    expect(unlockAudioMock).toHaveBeenCalledOnce();
+    expect(unlockAudioMock).not.toHaveBeenCalled();
     expect(browserWindowState.setFullScreen).toHaveBeenCalledWith(false);
     expect(browserWindowState.hide).toHaveBeenCalledOnce();
   });

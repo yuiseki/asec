@@ -163,7 +163,6 @@ export class AsecRuntime {
     });
 
     ipcMain.handle('security-surface:complete-lock-screen-hide', async () => {
-      await unlockAudio();
       this.securityWindow.setFullScreen(false);
       this.securityWindow.hide();
       return { ok: true };
@@ -256,6 +255,7 @@ export class AsecRuntime {
         });
         break;
       case 'lock_screen_hide':
+        await unlockAudio();
         this.sendCommand({
           kind: 'lock/hide',
         });
