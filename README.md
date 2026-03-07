@@ -80,6 +80,26 @@ npm run demo
 - `WHISPER_AGENT_BIOMETRIC_PASSWORD_PRIVATE_KEY`
 - `WHISPER_AGENT_BIOMETRIC_UNLOCK_SIGNAL_FILE`
 
+## Temporary Switchover With `tmp/whispercpp-listen`
+
+旧 `lock_screen_bridge.py` を残したまま、lock screen だけ `asec` へ逃がす暫定切り替えができます。
+
+1. `asec` を別ポートで起動する
+
+```bash
+cd /home/yuiseki/Workspaces/repos/asec
+npm run start:bridge -- --tcp-port 47843
+```
+
+2. 音声待受 agent の lock screen 送信先だけ変える
+
+```bash
+cd /home/yuiseki/Workspaces/tmp/whispercpp-listen
+WHISPER_AGENT_LOCK_SCREEN_IPC_PORT=47843 ./tmux_listen_only.sh restart-agent
+```
+
+この段階では caption overlay は従来どおりで、lock screen だけ `asec` が担当します。
+
 ## Notes
 
 - 既存 `tmp/whispercpp-listen` との切り替えはまだ未着手です
