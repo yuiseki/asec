@@ -8,6 +8,10 @@ app.commandLine.appendSwitch('no-sandbox');
 let runtime: AsecRuntime | null = null;
 const runtimeOptions = loadRuntimeOptions();
 
+if (runtimeOptions.disableGpu) {
+  app.commandLine.appendSwitch('disable-gpu');
+}
+
 async function bootstrap(): Promise<void> {
   runtime = new AsecRuntime();
   await runtime.init();

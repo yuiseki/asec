@@ -1,6 +1,7 @@
 export type RuntimeOptions = {
   autoDemo: boolean;
   demoExit: boolean;
+  disableGpu: boolean;
 };
 
 function readBooleanEnv(name: string): boolean {
@@ -12,6 +13,7 @@ export function loadRuntimeOptions(): RuntimeOptions {
   return {
     autoDemo: readBooleanEnv('ASEC_AUTODEMO'),
     demoExit: readBooleanEnv('ASEC_DEMO_EXIT'),
+    disableGpu: !readBooleanEnv('ASEC_ENABLE_GPU'),
   };
 }
 

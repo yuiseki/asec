@@ -15,6 +15,7 @@ describe('loadRuntimeOptions', () => {
 
     expect(options.autoDemo).toBe(false);
     expect(options.demoExit).toBe(false);
+    expect(options.disableGpu).toBe(true);
   });
 
   it('enables auto demo and exit from environment flags', () => {
@@ -25,6 +26,15 @@ describe('loadRuntimeOptions', () => {
 
     expect(options.autoDemo).toBe(true);
     expect(options.demoExit).toBe(true);
+    expect(options.disableGpu).toBe(true);
+  });
+
+  it('allows GPU explicitly for debugging', () => {
+    vi.stubEnv('ASEC_ENABLE_GPU', '1');
+
+    const options = loadRuntimeOptions();
+
+    expect(options.disableGpu).toBe(false);
   });
 });
 
