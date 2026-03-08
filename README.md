@@ -9,7 +9,7 @@ Electron + React + TypeScript で実装した lock screen / security surface で
 - password submit で local unlock signal file を書く
 - lock 中の audio mute / unlock 時の unmute を担当
 - 起動時に stale mute を解除して lock crash 後の無音残留を回復する
-- 開発中の既定ポートは `127.0.0.1:47843`
+- 既定ポートは `127.0.0.1:47833`
 
 ## Commands
 
@@ -19,7 +19,7 @@ npm test
 npm run build
 npm run dev
 npm run demo
-npm run start:bridge -- --tcp-port 47843
+npm run start:bridge -- --tcp-port 47833
 ```
 
 `npm run demo` は desktop session の `DISPLAY` / `XAUTHORITY` を自動検出し、build 後に lock screen demo を 1 回表示して自動終了します。
@@ -80,28 +80,19 @@ npm run demo
 - `WHISPER_AGENT_BIOMETRIC_PASSWORD_PRIVATE_KEY`
 - `WHISPER_AGENT_BIOMETRIC_UNLOCK_SIGNAL_FILE`
 
-## Temporary Switchover With `tmp/whispercpp-listen`
+## Current Runtime Integration
 
-旧 `lock_screen_bridge.py` を残したまま、lock screen だけ `asec` へ逃がす暫定切り替えができます。
-
-1. `asec` を別ポートで起動する
-
-```bash
-cd /home/yuiseki/Workspaces/repos/asec
-npm run start:bridge -- --tcp-port 47843
-```
-
-2. 音声待受 agent の lock screen 送信先だけ変える
+`tmp/whispercpp-listen/tmux_listen_only.sh start-overlay` は、caption を `repos/acaption`、lock screen を `repos/asec` から起動します。
 
 ```bash
 cd /home/yuiseki/Workspaces/tmp/whispercpp-listen
-WHISPER_AGENT_LOCK_SCREEN_IPC_PORT=47843 ./tmux_listen_only.sh restart-agent
+./tmux_listen_only.sh start-overlay
+./tmux_listen_only.sh logs-lock-screen
 ```
-
-この段階では caption overlay は従来どおりで、lock screen だけ `asec` が担当します。
 
 ## Notes
 
-- 既存 `tmp/whispercpp-listen` との切り替えはまだ未着手です
 - GUI 上での fullscreen / always-on-top / keyboard focus / audio mute は手動検証が必要です
-- `acaption` とは別 repo として運用し、`tmp/tauri-caption-overlay-poc` の deprecation に向けて段階移行します
+- `acaption` とは別 repo として運用しつつ、runtime 上は `tmp/whispercpp-listen` から同時に管理されます
+- `npm run demo` は既定で `ASEC_DEMO_IPC_PORT=47843` を使い、常用 port と競合しません
+- `python/src/asec/ipc_client.py` には migration 向けの Python lock IPC client を置いており、`tmp/whispercpp-listen` の Wave 1 抽出で利用します

@@ -96,12 +96,12 @@ describe('withOverlayPortSelection', () => {
   it('keeps the regular port for normal launches', () => {
     const env = withOverlayPortSelection({
       inheritedEnv: {
-        ASEC_IPC_PORT: '47842',
+        ASEC_IPC_PORT: '47833',
       },
       autoDemo: false,
     });
 
-    expect(env.ASEC_IPC_PORT).toBe('47842');
+    expect(env.ASEC_IPC_PORT).toBe('47833');
   });
 
   it('uses a dedicated demo port when auto demo runs without an override', () => {

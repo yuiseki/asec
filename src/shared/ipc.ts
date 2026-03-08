@@ -1,4 +1,4 @@
-export const DEFAULT_SECURITY_PORT = 47843;
+export const DEFAULT_SECURITY_PORT = 47833;
 
 export type SecurityRequest =
   | {

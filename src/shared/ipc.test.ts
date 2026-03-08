@@ -43,7 +43,7 @@ describe('parseSecurityRequestLine', () => {
 });
 
 describe('security defaults', () => {
-  it('uses an alternate IPC port while the legacy lock bridge still exists', () => {
-    expect(DEFAULT_SECURITY_PORT).toBe(47843);
+  it('uses the legacy lock screen IPC port for drop-in compatibility', () => {
+    expect(DEFAULT_SECURITY_PORT).toBe(47833);
   });
 });
