@@ -10,10 +10,11 @@ function readBooleanEnv(name: string): boolean {
 }
 
 export function loadRuntimeOptions(): RuntimeOptions {
+  const enableGpu = readBooleanEnv('ASEC_ENABLE_GPU');
   return {
     autoDemo: readBooleanEnv('ASEC_AUTODEMO'),
     demoExit: readBooleanEnv('ASEC_DEMO_EXIT'),
-    disableGpu: !readBooleanEnv('ASEC_ENABLE_GPU'),
+    disableGpu: !enableGpu && readBooleanEnv('ASEC_DISABLE_GPU'),
   };
 }
 
