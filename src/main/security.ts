@@ -28,9 +28,16 @@ type PasswordLoaderDeps = {
     deps: {
       fsLike: FsLike;
       tmpdir: () => string;
+      execFile?: ExecFileLike;
     },
   ) => Promise<string>;
 };
+
+type ExecFileLike = (
+  file: string,
+  args: string[],
+  callback: (error: Error | null, stdout?: string, stderr?: string) => void,
+) => void;
 
 type SecurityPaths = {
   passwordFile: string;
@@ -82,15 +89,33 @@ function decodeCipherBase64(cipherBase64: string): Buffer {
   return cipherBytes;
 }
 
-async function decryptWithPrivateKey(
+async function runExecFile(
+  execFile: ExecFileLike,
+  file: string,
+  args: string[],
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    execFile(file, args, (error, stdout) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(stdout ?? '');
+    });
+  });
+}
+
+export async function decryptWithPrivateKey(
   privateKeyPath: string,
   cipherBytes: Buffer,
   deps: {
     fsLike: FsLike;
     tmpdir: () => string;
+    execFile?: ExecFileLike;
   },
 ): Promise<string> {
   const { fsLike, tmpdir } = deps;
+  const execFile = deps.execFile ?? (childProcessModule.execFile as ExecFileLike);
   const tmpRoot = await fsLike.promises.mkdtemp(joinPath(tmpdir(), 'asec-password-'));
   const cipherPath = joinPath(tmpRoot, 'cipher.bin');
   const tempKeyPath = joinPath(tmpRoot, 'key');
@@ -100,30 +125,31 @@ async function decryptWithPrivateKey(
     await fsLike.promises.copyFile(privateKeyPath, tempKeyPath);
     await fsLike.promises.chmod(tempKeyPath, 0o600);
 
-    const stdout = await new Promise<string>((resolve, reject) => {
-      childProcessModule.execFile(
-        'openssl',
-        [
-          'pkeyutl',
-          '-decrypt',
-          '-inkey',
-          tempKeyPath,
-          '-in',
-          cipherPath,
-          '-pkeyopt',
-          'rsa_padding_mode:oaep',
-          '-pkeyopt',
-          'rsa_oaep_md:sha256',
-        ],
-        (error, nextStdout) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve(nextStdout ?? '');
-        },
-      );
-    });
+    await runExecFile(execFile, 'ssh-keygen', [
+      '-p',
+      '-m',
+      'PEM',
+      '-N',
+      '',
+      '-P',
+      '',
+      '-f',
+      tempKeyPath,
+      '-q',
+    ]);
+
+    const stdout = await runExecFile(execFile, 'openssl', [
+      'pkeyutl',
+      '-decrypt',
+      '-inkey',
+      tempKeyPath,
+      '-in',
+      cipherPath,
+      '-pkeyopt',
+      'rsa_padding_mode:oaep',
+      '-pkeyopt',
+      'rsa_oaep_md:sha256',
+    ]);
 
     return stdout;
   } finally {
@@ -223,6 +249,7 @@ export async function loadPasswordCandidates(
     const stdout = await decrypt(privateKey, cipherBytes, {
       fsLike: fs,
       tmpdir: currentTmpdir,
+      execFile: childProcessModule.execFile as ExecFileLike,
     });
     const candidates = stdout
       .split(/\r?\n/u)

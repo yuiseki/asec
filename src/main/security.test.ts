@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  decryptWithPrivateKey,
   expandHomePath,
   loadPasswordCandidates,
   normalizePasswordText,
@@ -209,5 +210,89 @@ describe('loadPasswordCandidates', () => {
         decryptWithPrivateKey: vi.fn(async () => ' secret \npass code\n'),
       }),
     ).resolves.toEqual(['secret', 'pass code']);
+  });
+});
+
+describe('decryptWithPrivateKey', () => {
+  function createFsLike() {
+    return {
+      existsSync: vi.fn(() => true),
+      promises: {
+        chmod: vi.fn(async () => undefined),
+        copyFile: vi.fn(async () => undefined),
+        mkdtemp: vi.fn(async () => '/tmp/asec-password-test'),
+        mkdir: vi.fn(async () => undefined),
+        readFile: vi.fn(async () => ''),
+        rm: vi.fn(async () => undefined),
+        writeFile: vi.fn(async () => undefined),
+      },
+    };
+  }
+
+  it('normalizes OpenSSH private keys to PEM before invoking openssl', async () => {
+    const fsLike = createFsLike();
+    const execFile = vi.fn((
+      file: string,
+      _args: string[],
+      callback: (error: Error | null, stdout?: string, stderr?: string) => void,
+    ) => {
+      if (file === 'ssh-keygen') {
+        callback(null, '', '');
+        return;
+      }
+      callback(null, 'secret\nsecond\n', '');
+    });
+
+    await expect(
+      decryptWithPrivateKey(
+        '/home/yuiseki/.ssh/google_compute_engine',
+        Buffer.from('cipher'),
+        {
+          fsLike,
+          tmpdir: () => '/tmp',
+          execFile,
+        },
+      ),
+    ).resolves.toBe('secret\nsecond\n');
+
+    expect(execFile).toHaveBeenCalledTimes(2);
+    expect(execFile).toHaveBeenNthCalledWith(
+      1,
+      'ssh-keygen',
+      [
+        '-p',
+        '-m',
+        'PEM',
+        '-N',
+        '',
+        '-P',
+        '',
+        '-f',
+        '/tmp/asec-password-test/key',
+        '-q',
+      ],
+      expect.any(Function),
+    );
+    expect(execFile).toHaveBeenNthCalledWith(
+      2,
+      'openssl',
+      [
+        'pkeyutl',
+        '-decrypt',
+        '-inkey',
+        '/tmp/asec-password-test/key',
+        '-in',
+        '/tmp/asec-password-test/cipher.bin',
+        '-pkeyopt',
+        'rsa_padding_mode:oaep',
+        '-pkeyopt',
+        'rsa_oaep_md:sha256',
+      ],
+      expect.any(Function),
+    );
+    expect(fsLike.promises.rm).toHaveBeenCalledWith('/tmp/asec-password-test', {
+      recursive: true,
+      force: true,
+    });
   });
 });
