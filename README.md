@@ -82,12 +82,11 @@ npm run demo
 
 ## Current Runtime Integration
 
-`tmp/whispercpp-listen/tmux_listen_only.sh start-overlay` は、caption を `repos/acaption`、lock screen を `repos/asec` から起動します。
+`yuiclaw voice-command operator start-overlay` は、caption を `repos/acaption`、lock screen を `repos/asec` から起動します。
 
 ```bash
-cd /home/yuiseki/Workspaces/tmp/whispercpp-listen
-./tmux_listen_only.sh start-overlay
-./tmux_listen_only.sh logs-lock-screen
+yuiclaw voice-command operator start-overlay
+yuiclaw voice-command operator logs-lock-screen
 ```
 
 ## Notes
