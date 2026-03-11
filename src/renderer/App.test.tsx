@@ -57,6 +57,25 @@ describe('App', () => {
     expect(screen.getByText('SYSTEM LOCKED')).toBeInTheDocument();
   });
 
+  it('focuses the password field shortly after lock_screen_show', async () => {
+    const api = createApiMock();
+    let listener: ((command: { kind: 'lock/show'; text: string } | { kind: 'lock/hide' }) => void) | null = null;
+    api.onCommand = vi.fn((nextListener) => {
+      listener = nextListener;
+      return () => undefined;
+    });
+    window.securitySurfaceApi = api;
+
+    render(<App />);
+
+    await act(async () => {
+      listener?.({ kind: 'lock/show', text: 'SYSTEM LOCKED' });
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(screen.getByPlaceholderText('ENTER ACCESS CODE')).toHaveFocus();
+  });
+
   it('validates blank password input in the renderer', async () => {
     const api = createApiMock();
     let listener: ((command: { kind: 'lock/show'; text: string } | { kind: 'lock/hide' }) => void) | null = null;
@@ -109,5 +128,31 @@ describe('App', () => {
     });
 
     expect(api.completeLockScreenHide).toHaveBeenCalledOnce();
+  });
+
+  it('animates ring progress during remote unlock checking', async () => {
+    const api = createApiMock();
+    let listener: ((command: { kind: 'lock/show'; text: string } | { kind: 'lock/hide' }) => void) | null = null;
+    api.onCommand = vi.fn((nextListener) => {
+      listener = nextListener;
+      return () => undefined;
+    });
+    window.securitySurfaceApi = api;
+
+    const { container } = render(<App />);
+
+    await act(async () => {
+      listener?.({ kind: 'lock/show', text: 'SYSTEM LOCKED' });
+      listener?.({ kind: 'lock/hide' });
+      await vi.advanceTimersByTimeAsync(450);
+    });
+
+    const ringArc = container.querySelector('#ls-ring-arc');
+    expect(ringArc).not.toBeNull();
+    const dashOffset = Number.parseFloat(
+      (ringArc as SVGElement).style.strokeDashoffset,
+    );
+    expect(dashOffset).toBeGreaterThan(120);
+    expect(dashOffset).toBeLessThan(678);
   });
 });
