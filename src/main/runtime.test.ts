@@ -79,6 +79,7 @@ import { AsecRuntime } from './runtime';
 
 describe('AsecRuntime', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     browserWindowMock.mockClear();
     ipcMainMock.handle.mockClear();
     ipcMainMock.removeHandler.mockClear();
@@ -96,6 +97,11 @@ describe('AsecRuntime', () => {
     browserWindowState.focus.mockClear();
     browserWindowState.hide.mockClear();
     browserWindowState.send.mockClear();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   it('prepares the lock window as a screen-saver surface', () => {
@@ -174,6 +180,29 @@ describe('AsecRuntime', () => {
     expect(browserWindowState.send).toHaveBeenCalledWith('security-surface:command', {
       kind: 'lock/hide',
     });
+  });
+
+  it('forces the window hidden if the renderer never completes the unlock animation', async () => {
+    const runtime = new AsecRuntime();
+    await runtime.init();
+    unlockAudioMock.mockClear();
+
+    const rendererReady = ipcHandlerMap.get('security-surface:renderer-ready');
+    expect(rendererReady).toBeTypeOf('function');
+    await rendererReady?.();
+
+    const dispatchRequest = Reflect.get(runtime, 'dispatchRequest') as (
+      request: { type: 'lock_screen_show'; text: string } | { type: 'lock_screen_hide' },
+    ) => Promise<void>;
+
+    await dispatchRequest.call(runtime, {
+      type: 'lock_screen_hide',
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(browserWindowState.setFullScreen).toHaveBeenCalledWith(false);
+    expect(browserWindowState.hide).toHaveBeenCalledOnce();
   });
 
   it('hides the window when the renderer finishes the unlock animation', async () => {

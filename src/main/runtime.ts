@@ -38,6 +38,8 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve };
 }
 
+const UNLOCK_HIDE_FALLBACK_MS = 3000;
+
 class SequentialJobQueue {
   private tail: Promise<void> = Promise.resolve();
 
@@ -58,6 +60,7 @@ export class AsecRuntime {
   private readonly securityWindow: BrowserWindow;
   private server: Server | null = null;
   private rendererReadySettled = false;
+  private hideFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     const preloadPath = pathModule.join(__dirname, '../preload/index.js');
@@ -164,6 +167,7 @@ export class AsecRuntime {
     });
 
     ipcMain.handle('security-surface:complete-lock-screen-hide', async () => {
+      this.clearHideFallbackTimer();
       this.securityWindow.setFullScreen(false);
       this.securityWindow.hide();
       return { ok: true };
@@ -242,6 +246,7 @@ export class AsecRuntime {
     await this.rendererReady.promise;
     switch (request.type) {
       case 'lock_screen_show':
+        this.clearHideFallbackTimer();
         await lockAudio();
         this.securityWindow.show();
         this.securityWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -260,7 +265,24 @@ export class AsecRuntime {
         this.sendCommand({
           kind: 'lock/hide',
         });
+        this.armHideFallbackTimer();
         break;
+    }
+  }
+
+  private armHideFallbackTimer(): void {
+    this.clearHideFallbackTimer();
+    this.hideFallbackTimer = setTimeout(() => {
+      this.securityWindow.setFullScreen(false);
+      this.securityWindow.hide();
+      this.hideFallbackTimer = null;
+    }, UNLOCK_HIDE_FALLBACK_MS);
+  }
+
+  private clearHideFallbackTimer(): void {
+    if (this.hideFallbackTimer !== null) {
+      clearTimeout(this.hideFallbackTimer);
+      this.hideFallbackTimer = null;
     }
   }
 
